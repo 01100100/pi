@@ -63,8 +63,7 @@ while True:
     return_code, frame = video_stream.read()
     # run cascading algorithm and search for face positonal co-ordinates
 
-    for frame in camera.capture_continuous(rawCapture, format="bgr",
-                                           use_video_port=True):
+    for frame in camera.capture_continuous(rawCapture, format="bgr", use_video_port=True):
         # grab the raw NumPy array representing the image, then initialize the timestamp
         # and occupied/unoccupied text
         image = frame.array
