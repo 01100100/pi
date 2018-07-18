@@ -1,7 +1,7 @@
 import cv2
-import os
+from picamera.array import PiRGBArray
+from picamera import PiCamera
 import time
-
 
 # TODO: def SetAngle(angle):
 # 	duty = angle / 18 + 2
@@ -40,7 +40,20 @@ def move_back_to_centre(faces, frame):
     rel_x, rel_y = mid_x - (width//2) , mid_y - (height//2)
     return rel_x, rel_y
 
-face_cascade_path = 'C:/Users/david/PycharmProjects/face/venv/Lib/site-packages/cv2/data/haarcascade_frontalface_default.xml'
+# setting up the camera feed
+camera = PiCamera()
+# TODO: look up the cost payoffs for different resolutions and framerates. Maybe do some profiling...
+camera.resolution = (640, 480)
+camera.framerate = 32
+rawCapture = PiRGBArray(camera, size=(640, 480))
+
+# small delay so the camera to warmup, TODO: find out why we need this line.
+time.sleep(0.1)
+
+
+# TODO: find the correct locations of the cascade filters on the rpi
+
+face_cascade_path = 'cascade_filters/haarcascade_frontalface_default.xml'
 face_classifier = cv2.CascadeClassifier(face_cascade_path)
 
 video_stream = cv2.VideoCapture(0)
@@ -49,18 +62,25 @@ while True:
     # Taking frames from the live stream as images. return_code can tell us wether we have ran out of frames ect... But is not used with live feeds
     return_code, frame = video_stream.read()
     # run cascading algorithm and search for face positonal co-ordinates
-    faces = locate_faces(frame)
+
+    for frame in camera.capture_continuous(rawCapture, format="bgr",
+                                           use_video_port=True):
+        # grab the raw NumPy array representing the image, then initialize the timestamp
+        # and occupied/unoccupied text
+        image = frame.array
+
+    faces = locate_faces(image)
     # then we want to move the servo's based on this TODO: how do servos move?
     # servo_v =
     # servo_h =
-    draw_box(frame, faces)
+    draw_box(image, faces)
     # Displaying the augmented feed, flipping in the horizontal axis to make the display seem like a mirror
-    cv2.imshow('LIVE', cv2.flip(frame,1))
+    cv2.imshow('LIVE FEED', cv2.flip(image,1))
     key = cv2.waitKey(1)
     # print(count_people(faces))
     # print(frame.shape)
     if len(faces) == 1:
-        move_x, move_y = move_back_to_centre(faces, frame)
+        move_x, move_y = move_back_to_centre(faces, image)
         print(move_x, move_y)
     if key & 0xFF == 27:  # here 27 represents the esc key
         break
@@ -68,4 +88,3 @@ while True:
 
 video_stream.release()
 cv2.destroyAllWindows()
-pi 
