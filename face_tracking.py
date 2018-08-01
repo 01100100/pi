@@ -2,14 +2,55 @@ import cv2
 from picamera.array import PiRGBArray
 from picamera import PiCamera
 import time
+import RPi.GPIO as GPIO  # for the sensors
 
-# TODO: def SetAngle(angle):
-# 	duty = angle / 18 + 2
-# 	GPIO.output(03, True)
-# 	pwm.ChangeDutyCycle(duty)
-# 	sleep(1)
-# 	GPIO.output(03, False)
-# 	pwm.ChangeDutyCycle(0)
+
+# # SENSOR SETUP
+# servo_x_pin =
+# servo_y_pin =
+# sonic_trigger_pin =
+# sonic_echo_pin =
+
+def setup():
+    global servo_X  # Do I need these glovbla, what should the logic be here?
+    global servo_Y
+    GPIO.setmode(GPIO.BOARD)       # Numbers GPIOs by physical location
+    GPIO.setup(servo_x_pin, GPIO.OUT)
+    GPIO.setup(servo_y_pin, GPIO.OUT)
+    GPIO.setup(sonic_trigger_pin, GPIO.OUT)
+    GPIO.setup(sonic_echo, GPIO.IN)
+    GPIO.output(servo_x_pin, GPIO.LOW)
+    GPIO.output(servo_y_pin, GPIO.LOW)
+    servo_X = GPIO.PWM(servo_x_pin, 50)     # set Frequecy of pulse to 50Hz
+    servo_Y = GPIO.PWM(servo_y_pin, 50)
+    servo_X.start(0)
+    servo_Y.start(0)
+
+def servo_signal_wavelength(angle,
+                 servo_max_duty=12.5,
+                 servo_min_duty=2.5,
+                 max_angle=180,
+                 min_angle=0):
+    return (servo_max_duty - servo_min_duty)*(angle-min_angle) / (max_angle - min_angle) + servo_min_duty
+
+def servo_move(angle, servo):      # make the servo rotate to specific angle (0-180 degrees)
+    if(angle<0):
+        angle = 0
+    elif(angle > 180):
+        angle = 180
+    servo.ChangeDutyCycle(servo_signal_wavelength(angle)) # Changes the duty cycle to direct servo
+
+def destroy():
+    video_stream.release()
+    cv2.destroyAllWindows()
+    servo_X.stop()
+    servo_Y.stop()
+    GPIO.cleanup()
+
+
+def servo_angle_to_pulse_ms(angle, servo_max_duty=12.5, servo_min_duty=2.5, max_angle=180, min_angle=180):
+    return ((servo_max_duty-servo_min_duty)*(angle-min_angle))/(max_angle - min_angle) + servo_min_duty
+
 
 def locate_faces(frame):
     # Converting to grayscale
@@ -32,7 +73,6 @@ def draw_box(frame, faces):
 def count_people(faces):
     return len(faces)
 
-
 def move_back_to_centre(faces, frame):
     height, width, _  = frame.shape
     x,y,h,w = faces[0]
@@ -40,6 +80,52 @@ def move_back_to_centre(faces, frame):
     rel_x, rel_y = mid_x - (width//2) , mid_y - (height//2)
     return rel_x, rel_y
 
+
+def map(value, fromLow, fromHigh, toLow, toHigh):
+    return (toHigh - toLow) * (value - fromLow) / (fromHigh - fromLow) + toLow
+
+
+def servo_setup():
+    servoPin = 12
+    global p
+    GPIO.setmode(GPIO.BOARD)  # Numbers GPIOs by physical location
+    GPIO.setup(servoPin, GPIO.OUT)  # Set servoPin's mode is output
+    GPIO.output(servoPin, GPIO.LOW)  # Set servoPin to low
+
+    p = GPIO.PWM(servoPin, 50)  # set Frequece to 50Hz
+    p.start(0)  # Duty Cycle = 0
+
+
+def servo_move(
+        angle):  # make the servo rotate to specific angle (0-180 degrees)
+    if (angle < 0):
+        angle = 0
+    elif (angle > 180):
+        angle = 180
+    p.ChangeDutyCycle(map(angle, 0, 180, SERVO_MIN_DUTY,
+                          SERVO_MAX_DUTY))  # map the angle to duty cycle and output it
+
+
+def loop():
+    while True:
+        for dc in range(0, 181, 1):  # make servo rotate from 0 to 180 deg
+            servoWrite(dc)  # Write to servo
+            time.sleep(0.001)
+        time.sleep(0.5)
+        for dc in range(180, -1, -1):  # make servo rotate from 180 to 0 deg
+            servoWrite(dc)
+            time.sleep(0.001)
+        time.sleep(0.5)
+
+
+def destroy(video_stream):
+    p.stop()
+    # STOP CAMERA AND CV2
+    cv2.destroyAllWindows()
+    GPIO.cleanup()
+    video_stream.close()
+
+def setup_cam()
 # setting up the camera feed
 camera = PiCamera()
 # TODO: look up the cost payoffs for different resolutions and framerates. Maybe do some profiling...
@@ -70,20 +156,21 @@ while True:
 
     faces = locate_faces(image)
     # then we want to move the servo's based on this TODO: how do servos move?
-    # servo_v =
-    # servo_h =
     draw_box(image, faces)
     # Displaying the augmented feed, flipping in the horizontal axis to make the display seem like a mirror
     cv2.imshow('LIVE FEED', cv2.flip(image,1))
     key = cv2.waitKey(1)
-    # print(count_people(faces))
-    # print(frame.shape)
     if len(faces) == 1:
         move_x, move_y = move_back_to_centre(faces, image)
         print(move_x, move_y)
     if key & 0xFF == 27:  # here 27 represents the esc key
         break
 
-
-video_stream.release()
-cv2.destroyAllWindows()
+if __name__ == '__main__':     #Program start from here
+    print('STARTING PROGRAM...')
+    setup()
+    print('SETUP COMPLETE...')
+    try:
+        loop()
+    except KeyboardInterrupt:  # When 'Ctrl+C' is pressed, the child program destroy() will be  executed.
+        destroy()
